@@ -5,13 +5,22 @@ import { backHome } from "../library-ui.js";
 import { inlineButton, inlineKeyboard } from "../toolkit/index.js";
 
 const composer = new Composer<Ctx>();
-const adminId = (): number | undefined => {
-  const raw = typeof process === "undefined" ? undefined : process.env.ADMIN_ID;
+const adminId = (ctx: Ctx): number | undefined => {
+  // Node deployments expose settings through process.env; Workers attach their
+  // deployment environment to the context before feature handlers run.
+  const workerEnv = (ctx as unknown as { env?: { ADMIN_ID?: unknown } }).env;
+  const raw = typeof workerEnv?.ADMIN_ID === "string"
+    ? workerEnv.ADMIN_ID
+    : typeof process === "undefined" ? undefined : process.env.ADMIN_ID;
   const value = raw ? Number(raw) : NaN; return Number.isSafeInteger(value) ? value : undefined;
 };
-const isAdmin = (ctx: Ctx) => !!ctx.from && ctx.from.id === adminId();
+const isAdmin = (ctx: Ctx) => !!ctx.from && ctx.from.id === adminId(ctx);
 async function denied(ctx: Ctx, edit = false) {
-  const text = adminId() ? "You don't have access to the library controls." : "Admin access hasn't been configured yet.";
+  const text = adminId(ctx) ? "You don't have access to the library controls." : "Admin access hasn't been configured yet.";
+  if (edit) await ctx.editMessageText(text, { reply_markup: backHome }); else await ctx.reply(text, { reply_markup: backHome });
+}
+async function broadcastDenied(ctx: Ctx, edit = false) {
+  const text = "This feature is for admins only.";
   if (edit) await ctx.editMessageText(text, { reply_markup: backHome }); else await ctx.reply(text, { reply_markup: backHome });
 }
 const panel = () => inlineKeyboard([[inlineButton("Upload files", "admin:upload")], [inlineButton("Create section", "admin:menu:new"), inlineButton("Delete section", "admin:menu:delete")], [inlineButton("Manage files", "admin:files"), inlineButton("Analytics", "analytics:summary")], [inlineButton("Broadcast", "admin:broadcast")], [inlineButton("Home", "menu:home")]]);
@@ -23,7 +32,11 @@ composer.command("admin", async (ctx) => showPanel(ctx));
 composer.on("callback_query:data", async (ctx, next) => {
   const data = ctx.callbackQuery.data;
   if (!data.startsWith("admin:") && data !== "analytics:summary") return next();
-  await ctx.answerCallbackQuery(); if (!isAdmin(ctx)) return denied(ctx, true);
+  await ctx.answerCallbackQuery();
+  // This explicit check intentionally precedes the shared admin guard: a
+  // forged callback must receive the same clear answer as a hidden button.
+  if (data === "admin:broadcast" && !isAdmin(ctx)) return broadcastDenied(ctx, true);
+  if (!isAdmin(ctx)) return denied(ctx, true);
   if (data === "admin:panel") return showPanel(ctx, true);
   if (data === "admin:menu:new") { ctx.session.flow = "menu-title"; ctx.session.pending = {}; await ctx.editMessageText("Send the section title.", { reply_markup: inlineKeyboard([[inlineButton("Cancel", "admin:panel")]]) }); return; }
   if (data === "admin:menu:delete") { await ctx.editMessageText("Choose an empty section to delete.", { reply_markup: await targetKeyboard("delete") }); return; }
@@ -43,6 +56,14 @@ composer.on("callback_query:data", async (ctx, next) => {
 });
 
 composer.on("message", async (ctx, next) => {
+  // A role can be changed while a conversation is open. Do not let a stale
+  // broadcast session turn a later message into an announcement.
+  if (ctx.session.flow === "broadcast" && !isAdmin(ctx)) {
+    ctx.session.flow = undefined;
+    ctx.session.pending = {};
+    await broadcastDenied(ctx);
+    return;
+  }
   if (!isAdmin(ctx) || !ctx.session.flow) return next();
   const flow = ctx.session.flow; const pending = ctx.session.pending ?? {};
   if (flow === "menu-title" && ctx.message.text) { const title = ctx.message.text.trim(); if (!title || title.length > 60) { await ctx.reply("Use a section title between 1 and 60 characters."); return; } ctx.session.flow = "menu-description"; ctx.session.pending = { title }; await ctx.reply("Send a short description, or type Skip."); return; }

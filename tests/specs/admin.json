@@ -16,5 +16,24 @@
         }
       }
     ]
+  },
+  {
+    "name": "non-admin broadcast callbacks are rejected",
+    "steps": [
+      {
+        "send": {
+          "callback": "admin:broadcast",
+          "userId": 99
+        },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "This feature is for admins only."
+            }
+          }
+        ]
+      }
+    ]
   }
 ]
