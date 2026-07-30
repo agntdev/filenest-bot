@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Open admin control panel for menu/file management"
+              "text": "Admin access hasn't been configured yet."
             }
           }
         ],
