@@ -5,9 +5,9 @@
       {
         "expect": [
           {
-            "method": "sendMessage",
+            "method": "editMessageText",
             "payload": {
-              "text": "Return to top-level menu structure"
+              "text": "No library sections are available yet."
             }
           }
         ],

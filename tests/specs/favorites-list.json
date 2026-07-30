@@ -5,9 +5,9 @@
       {
         "expect": [
           {
-            "method": "sendMessage",
+            "method": "editMessageText",
             "payload": {
-              "text": "View and manage personal favorites list"
+              "text": "No favorites yet. Open a file and tap Save favorite."
             }
           }
         ],
