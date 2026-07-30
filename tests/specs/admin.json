@@ -1,0 +1,20 @@
+[
+  {
+    "name": "/admin",
+    "steps": [
+      {
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Open admin control panel for menu/file management"
+            }
+          }
+        ],
+        "send": {
+          "text": "/admin"
+        }
+      }
+    ]
+  }
+]
